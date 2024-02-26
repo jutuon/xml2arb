@@ -288,15 +288,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0770833d60a970638e989b3fa9fd2bb1aaadcf88963d1659fd7d9990196ed2d6"
 
 [[package]]
-name = "xml"
-version = "0.8.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cb5b0add8d5aaa69357818de5f3b60104a62ef345dca81d0947e2148347a7f7"
-dependencies = [
- "xml-rs",
-]
-
-[[package]]
 name = "xml-rs"
 version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -309,5 +300,5 @@ dependencies = [
  "anyhow",
  "clap",
  "serde_json",
- "xml",
+ "xml-rs",
 ]
