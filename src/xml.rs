@@ -1,6 +1,6 @@
 //! Read Android string resources from XML files
 
-use std::path::Path;
+use std::{path::Path, str::Chars};
 use std::fs;
 use anyhow::{anyhow, Context, Result};
 use xml::attribute::OwnedAttribute;
@@ -17,7 +17,7 @@ const STRINGS_XML_DESCRIPTION_ATTRIBUTE: &str = "description";
 #[derive(Debug)]
 pub struct StringValue {
     pub key: String,
-    pub value: String,
+    pub value: ParsedStringXmlValue,
     pub description: Option<String>,
 }
 
@@ -91,7 +91,7 @@ fn handle_strings_xml(xml: impl AsRef<Path>, locale: &str) -> Result<ParsedStrin
                             state = ParserState::InString;
                             let mut string_value = StringValue {
                                 key: String::new(),
-                                value: String::new(),
+                                value: ParsedStringXmlValue::default(),
                                 description: None,
                             };
                             handle_string_tag_attributes(&mut string_value, &attributes)?;
@@ -114,7 +114,7 @@ fn handle_strings_xml(xml: impl AsRef<Path>, locale: &str) -> Result<ParsedStrin
                     ParserState::InResources => (),
                     ParserState::InString =>
                         if let Some(mut current_string) = current_string.take() {
-                            current_string.value = s;
+                            current_string.value = ParsedStringXmlValue::parse(s)?;
                             parsed_xml.strings.push(current_string);
                         }
                 }
@@ -136,4 +136,158 @@ fn handle_string_tag_attributes(value: &mut StringValue, tags: &[OwnedAttribute]
         value.description = Some(description.value.clone());
     }
     Ok(())
+}
+
+
+#[derive(Debug)]
+pub enum FormatSpecifierType {
+    String,
+}
+
+#[derive(Debug)]
+pub struct FormatSpecifier {
+    pub specifier_type: FormatSpecifierType,
+    pub arg_number: u32,
+}
+
+impl FormatSpecifier {
+    fn to_arb_string(&self) -> String {
+        format!("{{{}}}", self.to_arb_placeholder_name())
+    }
+
+    pub fn to_arb_placeholder_name(&self) -> String {
+        format!("param{}", self.arg_number)
+    }
+
+    pub fn to_arb_placeholder_type(&self) -> &'static str {
+        match self.specifier_type {
+            FormatSpecifierType::String => "String",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ParsedStringXmlValuePart {
+    FormatSpecifier(FormatSpecifier),
+    Text(String),
+}
+
+impl ParsedStringXmlValuePart {
+    pub fn to_arb_string(&self) -> String {
+        match self {
+            Self::FormatSpecifier(specifier) => specifier.to_arb_string(),
+            Self::Text(t) => t.clone(),
+        }
+    }
+
+    pub fn is_format_specifier(&self) -> bool {
+        matches!(self, Self::FormatSpecifier { .. })
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ParsedStringXmlValue {
+    contents: Vec<ParsedStringXmlValuePart>
+}
+
+impl ParsedStringXmlValue {
+    fn parse(text: String) -> Result<Self> {
+        let mut data = text.chars();
+        let mut current_text = String::new();
+        let mut current_arg_number = 0;
+        let mut parsed = vec![];
+
+        while let Some(c) = data.next() {
+            match c {
+                '\\' => {
+                    Self::current_to_text_if_needed(&mut current_text, &mut parsed);
+                    let success = Self::parse_escaped(data.as_str())?;
+                    parsed.push(success.parsed);
+                    data = success.new_iterator_state;
+                }
+                '%' => {
+                    Self::current_to_text_if_needed(&mut current_text, &mut parsed);
+                    let success = Self::parse_formatting_specifier(data.as_str(), &mut current_arg_number)?;
+                    parsed.push(success.parsed);
+                    data = success.new_iterator_state;
+                }
+                c @ _ => {
+                    current_text.push(c)
+                }
+            }
+        }
+
+        Self::current_to_text_if_needed(&mut current_text, &mut parsed);
+
+        Ok(Self {
+            contents: parsed,
+        })
+    }
+
+    fn parse_escaped(remaining: &str) -> Result<ParseSuccessful> {
+        if remaining.starts_with("\\") {
+            Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("\\".to_string())))
+        } else if remaining.starts_with("'") {
+            Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("'".to_string())))
+        } else {
+            Err(anyhow!("Parsing escape character failed, remaining: {remaining}"))
+        }
+    }
+
+    fn parse_formatting_specifier<'a>(remaining: &'a str, current_arg_number: &mut u32) -> Result<ParseSuccessful<'a>> {
+        if remaining.starts_with("%") {
+            Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("%".to_string())))
+        } else if remaining.starts_with("s") {
+            let specifier = FormatSpecifier {
+                specifier_type: FormatSpecifierType::String,
+                arg_number: *current_arg_number,
+            };
+            let parsed = ParseSuccessful::skip_one_char(
+                remaining,
+                ParsedStringXmlValuePart::FormatSpecifier(specifier),
+            );
+            *current_arg_number += 1;
+            Ok(parsed)
+        } else {
+            Err(anyhow!("Parsing formatting specifier failed, remaining: {remaining}"))
+        }
+    }
+
+    fn current_to_text_if_needed(current: &mut String, parts: &mut Vec<ParsedStringXmlValuePart>) {
+        if !current.is_empty() {
+            parts.push(ParsedStringXmlValuePart::Text(current.clone()));
+            current.clear();
+        }
+    }
+
+    pub fn to_arb_string(&self) -> String {
+        self.contents.iter().map(|v| v.to_arb_string()).collect()
+    }
+
+    pub fn format_specifiers(&self) -> impl Iterator<Item = &FormatSpecifier> {
+        self.contents.iter().filter_map(|v|
+            if let ParsedStringXmlValuePart::FormatSpecifier(specifier) = v {
+                Some(specifier)
+            } else {
+                None
+            }
+        )
+    }
+}
+
+
+struct ParseSuccessful<'a> {
+    new_iterator_state: Chars<'a>,
+    parsed: ParsedStringXmlValuePart,
+}
+
+impl <'a> ParseSuccessful<'a> {
+    pub fn skip_one_char(remaining: &'a str, parsed: ParsedStringXmlValuePart) -> ParseSuccessful<'a> {
+        let mut new_chars = remaining.chars();
+        new_chars.next();
+        Self {
+            new_iterator_state: new_chars,
+            parsed,
+        }
+    }
 }

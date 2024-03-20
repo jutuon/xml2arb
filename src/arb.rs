@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::{config::ArbFileNameTemplate, xml::{ParsedStringsXml, StringValue, LOCALE_EN}};
 
@@ -27,12 +27,35 @@ fn to_arb_string(mut parsed: Vec<StringValue>, only_key: bool) -> Result<String>
     let mut map = serde_json::Map::new();
 
     for string in parsed {
-        map.insert(string.key.clone(), json!(string.value));
+        map.insert(string.key.clone(), json!(string.value.to_arb_string()));
         if only_key {
             continue;
         }
+
+        let mut attributes = serde_json::Map::new();
+
         if let Some(description) = string.description {
-            map.insert(format!("@{}", string.key), json!({"description": description}));
+            attributes.insert("description".to_string(), Value::String(description));
+        }
+
+        if string.value.format_specifiers().any(|_| true) {
+            let mut placeholdres = serde_json::Map::new();
+            for specifier in string.value.format_specifiers() {
+                let k = specifier.to_arb_placeholder_name();
+                let placeholder_type = specifier.to_arb_placeholder_type();
+                placeholdres.insert(
+                    k,
+                    json!({
+                        "type" : placeholder_type
+                    })
+                );
+            }
+            attributes.insert("placeholders".to_string(), Value::Object(placeholdres));
+        }
+
+
+        if !attributes.is_empty() {
+            map.insert(format!("@{}", string.key), Value::Object(attributes));
         }
     }
 
