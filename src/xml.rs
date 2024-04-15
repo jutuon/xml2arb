@@ -156,7 +156,7 @@ impl FormatSpecifier {
     }
 
     pub fn to_arb_placeholder_name(&self) -> String {
-        format!("param{}", self.arg_number)
+        format!("p{}", self.arg_number)
     }
 
     pub fn to_arb_placeholder_type(&self) -> &'static str {
