@@ -211,7 +211,7 @@ impl ParsedStringXmlValue {
                     parsed.push(success.parsed);
                     data = success.new_iterator_state;
                 }
-                c @ _ => {
+                c => {
                     current_text.push(c)
                 }
             }
@@ -225,9 +225,9 @@ impl ParsedStringXmlValue {
     }
 
     fn parse_escaped(remaining: &str) -> Result<ParseSuccessful> {
-        if remaining.starts_with("\\") {
+        if remaining.starts_with('\\') {
             Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("\\".to_string())))
-        } else if remaining.starts_with("'") {
+        } else if remaining.starts_with('\'') {
             Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("'".to_string())))
         } else {
             Err(anyhow!("Parsing escape character failed, remaining: {remaining}"))
@@ -235,9 +235,9 @@ impl ParsedStringXmlValue {
     }
 
     fn parse_formatting_specifier<'a>(remaining: &'a str, current_arg_number: &mut u32) -> Result<ParseSuccessful<'a>> {
-        if remaining.starts_with("%") {
+        if remaining.starts_with('%') {
             Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("%".to_string())))
-        } else if remaining.starts_with("s") {
+        } else if remaining.starts_with('s') {
             let specifier = FormatSpecifier {
                 specifier_type: FormatSpecifierType::String,
                 arg_number: *current_arg_number,
