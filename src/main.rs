@@ -1,8 +1,6 @@
-
-pub mod config;
 pub mod arb;
+pub mod config;
 pub mod xml;
-
 
 fn main() {
     let config = config::get_config();
@@ -15,7 +13,11 @@ fn main() {
         }
     };
 
-    if let Err(e) = arb::save_to_arb_files(&config.output_dir, parsed_strings, config.arb_file_name_template) {
+    if let Err(e) = arb::save_to_arb_files(
+        &config.output_dir,
+        parsed_strings,
+        config.arb_file_name_template,
+    ) {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }

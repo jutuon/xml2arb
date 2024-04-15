@@ -3,9 +3,16 @@ use std::path::Path;
 use anyhow::Result;
 use serde_json::{json, Value};
 
-use crate::{config::ArbFileNameTemplate, xml::{ParsedStringsXml, StringValue, LOCALE_EN}};
+use crate::{
+    config::ArbFileNameTemplate,
+    xml::{ParsedStringsXml, StringValue, LOCALE_EN},
+};
 
-pub fn save_to_arb_files(arb_dir: impl AsRef<Path>, strings: Vec<ParsedStringsXml>, arb_template: ArbFileNameTemplate) -> Result<()> {
+pub fn save_to_arb_files(
+    arb_dir: impl AsRef<Path>,
+    strings: Vec<ParsedStringsXml>,
+    arb_template: ArbFileNameTemplate,
+) -> Result<()> {
     let path = arb_dir.as_ref();
     if !path.exists() {
         std::fs::create_dir_all(path)?;
@@ -55,12 +62,11 @@ fn to_arb_string(mut parsed: Vec<StringValue>, only_key: bool) -> Result<String>
                     k,
                     json!({
                         "type" : placeholder_type
-                    })
+                    }),
                 );
             }
             attributes.insert("placeholders".to_string(), Value::Object(placeholdres));
         }
-
 
         if !attributes.is_empty() {
             map.insert(format!("@{}", string.key), Value::Object(attributes));

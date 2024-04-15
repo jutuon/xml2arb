@@ -1,8 +1,8 @@
 //! Read Android string resources from XML files
 
-use std::{path::Path, str::Chars};
-use std::fs;
 use anyhow::{anyhow, Context, Result};
+use std::fs;
+use std::{path::Path, str::Chars};
 use xml::attribute::OwnedAttribute;
 
 pub const LOCALE_EN: &str = "en";
@@ -27,7 +27,9 @@ pub struct ParsedStringsXml {
     pub locale: String,
 }
 
-pub fn parse_android_strings_xml_files(android_project_res_dir: impl AsRef<Path>) -> Result<Vec<ParsedStringsXml>> {
+pub fn parse_android_strings_xml_files(
+    android_project_res_dir: impl AsRef<Path>,
+) -> Result<Vec<ParsedStringsXml>> {
     let mut parsed_files = Vec::new();
 
     for entry in fs::read_dir(android_project_res_dir)? {
@@ -44,12 +46,13 @@ pub fn parse_android_strings_xml_files(android_project_res_dir: impl AsRef<Path>
         let dir_file_name = entry.file_name();
         let locale = match dir_file_name.to_str() {
             Some(VALUES_DIR_NAME) => LOCALE_EN,
-            Some(other) =>
+            Some(other) => {
                 if other.starts_with(VALUES_DIR_NAME_WITH_LOCALE_PREFIX) {
                     other.trim_start_matches(VALUES_DIR_NAME_WITH_LOCALE_PREFIX)
                 } else {
                     continue;
                 }
+            }
             _ => continue,
         };
 
@@ -80,64 +83,66 @@ fn handle_strings_xml(xml: impl AsRef<Path>, locale: &str) -> Result<ParsedStrin
     let parser = xml::EventReader::from_str(&contents);
     for e in parser {
         match e? {
-            xml::reader::XmlEvent::StartElement { name, attributes, .. } =>
-                match state {
-                    ParserState::Start =>
-                        if name.local_name == STRINGS_XML_RESOURCES_TAG {
-                            state = ParserState::InResources;
-                        }
-                    ParserState::InResources =>
-                        if name.local_name == STRINGS_XML_STRING_TAG {
-                            state = ParserState::InString;
-                            let mut string_value = StringValue {
-                                key: String::new(),
-                                value: ParsedStringXmlValue::default(),
-                                description: None,
-                            };
-                            handle_string_tag_attributes(&mut string_value, &attributes)?;
-                            current_string = Some(string_value);
-                        }
-                    ParserState::InString => (),
+            xml::reader::XmlEvent::StartElement {
+                name, attributes, ..
+            } => match state {
+                ParserState::Start => {
+                    if name.local_name == STRINGS_XML_RESOURCES_TAG {
+                        state = ParserState::InResources;
+                    }
                 }
-            xml::reader::XmlEvent::EndElement { name } =>
-                match state {
-                    ParserState::Start |
-                    ParserState::InResources => (),
-                    ParserState::InString =>
-                        if name.local_name == STRINGS_XML_STRING_TAG {
-                            state = ParserState::InResources;
-                        }
+                ParserState::InResources => {
+                    if name.local_name == STRINGS_XML_STRING_TAG {
+                        state = ParserState::InString;
+                        let mut string_value = StringValue {
+                            key: String::new(),
+                            value: ParsedStringXmlValue::default(),
+                            description: None,
+                        };
+                        handle_string_tag_attributes(&mut string_value, &attributes)?;
+                        current_string = Some(string_value);
+                    }
                 }
-            xml::reader::XmlEvent::Characters(s) =>
-                match state {
-                    ParserState::Start |
-                    ParserState::InResources => (),
-                    ParserState::InString =>
-                        if let Some(mut current_string) = current_string.take() {
-                            current_string.value = ParsedStringXmlValue::parse(s)?;
-                            parsed_xml.strings.push(current_string);
-                        }
+                ParserState::InString => (),
+            },
+            xml::reader::XmlEvent::EndElement { name } => match state {
+                ParserState::Start | ParserState::InResources => (),
+                ParserState::InString => {
+                    if name.local_name == STRINGS_XML_STRING_TAG {
+                        state = ParserState::InResources;
+                    }
                 }
+            },
+            xml::reader::XmlEvent::Characters(s) => match state {
+                ParserState::Start | ParserState::InResources => (),
+                ParserState::InString => {
+                    if let Some(mut current_string) = current_string.take() {
+                        current_string.value = ParsedStringXmlValue::parse(s)?;
+                        parsed_xml.strings.push(current_string);
+                    }
+                }
+            },
             _ => {}
         }
     }
     Ok(parsed_xml)
 }
 
-
 fn handle_string_tag_attributes(value: &mut StringValue, tags: &[OwnedAttribute]) -> Result<()> {
-    let name_tag = tags.iter()
+    let name_tag = tags
+        .iter()
         .find(|a| a.name.local_name == STRINGS_XML_NAME_ATTRIBUTE)
         .ok_or(anyhow!("Missing '{STRINGS_XML_NAME_ATTRIBUTE}' attribute"))?;
     value.key = name_tag.value.clone();
 
-    let description = tags.iter().find(|a| a.name.local_name == STRINGS_XML_DESCRIPTION_ATTRIBUTE);
+    let description = tags
+        .iter()
+        .find(|a| a.name.local_name == STRINGS_XML_DESCRIPTION_ATTRIBUTE);
     if let Some(description) = description {
         value.description = Some(description.value.clone());
     }
     Ok(())
 }
-
 
 #[derive(Debug)]
 pub enum FormatSpecifierType {
@@ -187,7 +192,7 @@ impl ParsedStringXmlValuePart {
 
 #[derive(Debug, Default)]
 pub struct ParsedStringXmlValue {
-    contents: Vec<ParsedStringXmlValuePart>
+    contents: Vec<ParsedStringXmlValuePart>,
 }
 
 impl ParsedStringXmlValue {
@@ -207,36 +212,47 @@ impl ParsedStringXmlValue {
                 }
                 '%' => {
                     Self::current_to_text_if_needed(&mut current_text, &mut parsed);
-                    let success = Self::parse_formatting_specifier(data.as_str(), &mut current_arg_number)?;
+                    let success =
+                        Self::parse_formatting_specifier(data.as_str(), &mut current_arg_number)?;
                     parsed.push(success.parsed);
                     data = success.new_iterator_state;
                 }
-                c => {
-                    current_text.push(c)
-                }
+                c => current_text.push(c),
             }
         }
 
         Self::current_to_text_if_needed(&mut current_text, &mut parsed);
 
-        Ok(Self {
-            contents: parsed,
-        })
+        Ok(Self { contents: parsed })
     }
 
     fn parse_escaped(remaining: &str) -> Result<ParseSuccessful> {
         if remaining.starts_with('\\') {
-            Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("\\".to_string())))
+            Ok(ParseSuccessful::skip_one_char(
+                remaining,
+                ParsedStringXmlValuePart::Text("\\".to_string()),
+            ))
         } else if remaining.starts_with('\'') {
-            Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("'".to_string())))
+            Ok(ParseSuccessful::skip_one_char(
+                remaining,
+                ParsedStringXmlValuePart::Text("'".to_string()),
+            ))
         } else {
-            Err(anyhow!("Parsing escape character failed, remaining: {remaining}"))
+            Err(anyhow!(
+                "Parsing escape character failed, remaining: {remaining}"
+            ))
         }
     }
 
-    fn parse_formatting_specifier<'a>(remaining: &'a str, current_arg_number: &mut u32) -> Result<ParseSuccessful<'a>> {
+    fn parse_formatting_specifier<'a>(
+        remaining: &'a str,
+        current_arg_number: &mut u32,
+    ) -> Result<ParseSuccessful<'a>> {
         if remaining.starts_with('%') {
-            Ok(ParseSuccessful::skip_one_char(remaining, ParsedStringXmlValuePart::Text("%".to_string())))
+            Ok(ParseSuccessful::skip_one_char(
+                remaining,
+                ParsedStringXmlValuePart::Text("%".to_string()),
+            ))
         } else if remaining.starts_with('s') {
             let specifier = FormatSpecifier {
                 specifier_type: FormatSpecifierType::String,
@@ -249,7 +265,9 @@ impl ParsedStringXmlValue {
             *current_arg_number += 1;
             Ok(parsed)
         } else {
-            Err(anyhow!("Parsing formatting specifier failed, remaining: {remaining}"))
+            Err(anyhow!(
+                "Parsing formatting specifier failed, remaining: {remaining}"
+            ))
         }
     }
 
@@ -265,24 +283,26 @@ impl ParsedStringXmlValue {
     }
 
     pub fn format_specifiers(&self) -> impl Iterator<Item = &FormatSpecifier> {
-        self.contents.iter().filter_map(|v|
+        self.contents.iter().filter_map(|v| {
             if let ParsedStringXmlValuePart::FormatSpecifier(specifier) = v {
                 Some(specifier)
             } else {
                 None
             }
-        )
+        })
     }
 }
-
 
 struct ParseSuccessful<'a> {
     new_iterator_state: Chars<'a>,
     parsed: ParsedStringXmlValuePart,
 }
 
-impl <'a> ParseSuccessful<'a> {
-    pub fn skip_one_char(remaining: &'a str, parsed: ParsedStringXmlValuePart) -> ParseSuccessful<'a> {
+impl<'a> ParseSuccessful<'a> {
+    pub fn skip_one_char(
+        remaining: &'a str,
+        parsed: ParsedStringXmlValuePart,
+    ) -> ParseSuccessful<'a> {
         let mut new_chars = remaining.chars();
         new_chars.next();
         Self {

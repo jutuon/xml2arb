@@ -41,9 +41,14 @@ pub struct ArbFileNameTemplate {
 impl ArbFileNameTemplate {
     pub fn new(template: &str) -> Result<Self, String> {
         if !template.ends_with(ARB_FILE_TEMPLATE_SUFFIX) {
-            return Err(format!("Template file name must end with '{}'", ARB_FILE_TEMPLATE_SUFFIX));
+            return Err(format!(
+                "Template file name must end with '{}'",
+                ARB_FILE_TEMPLATE_SUFFIX
+            ));
         }
-        let prefix = template.trim_end_matches(ARB_FILE_TEMPLATE_SUFFIX).to_string();
+        let prefix = template
+            .trim_end_matches(ARB_FILE_TEMPLATE_SUFFIX)
+            .to_string();
         Ok(ArbFileNameTemplate { prefix })
     }
 
