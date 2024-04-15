@@ -15,6 +15,14 @@ pub fn save_to_arb_files(arb_dir: impl AsRef<Path>, strings: Vec<ParsedStringsXm
         let arb_file_content = to_arb_string(parsed.strings, parsed.locale != LOCALE_EN)?;
         let file_name = arb_template.get_file_name(&parsed.locale);
         let file_path = path.join(file_name);
+
+        if file_path.exists() {
+            let current_file_content = std::fs::read_to_string(&file_path)?;
+            if current_file_content == arb_file_content {
+                continue;
+            }
+        }
+
         std::fs::write(file_path, arb_file_content)?;
     }
 
