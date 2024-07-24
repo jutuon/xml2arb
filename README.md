@@ -61,6 +61,8 @@ automatically when you save your changes in Android Studio with Ctrl+S.
 
 ## Example XML files
 
+TODO: Update examples
+
 `res/values/strings.xml`:
 ```xml
 <resources>
