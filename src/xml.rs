@@ -190,6 +190,24 @@ impl ParsedStringXmlValuePart {
     }
 }
 
+impl From<FormatSpecifier> for ParsedStringXmlValuePart {
+    fn from(value: FormatSpecifier) -> Self {
+        Self::FormatSpecifier(value)
+    }
+}
+
+impl From<String> for ParsedStringXmlValuePart {
+    fn from(value: String) -> Self {
+        Self::Text(value)
+    }
+}
+
+impl <'a> From<&'a str> for ParsedStringXmlValuePart {
+    fn from(value: &'a str) -> Self {
+        Self::Text(value.to_string())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ParsedStringXmlValue {
     contents: Vec<ParsedStringXmlValuePart>,
@@ -227,21 +245,27 @@ impl ParsedStringXmlValue {
     }
 
     fn parse_escaped(remaining: &str) -> Result<ParseSuccessful> {
-        if remaining.starts_with('\\') {
-            Ok(ParseSuccessful::skip_one_char(
-                remaining,
-                ParsedStringXmlValuePart::Text("\\".to_string()),
-            ))
+        let parsed = if remaining.starts_with('\\') {
+            "\\"
         } else if remaining.starts_with('\'') {
-            Ok(ParseSuccessful::skip_one_char(
-                remaining,
-                ParsedStringXmlValuePart::Text("'".to_string()),
-            ))
+            "'"
+        } else if remaining.starts_with('\"') {
+            "\""
+        } else if remaining.starts_with('n') {
+            "\n"
+        } else if remaining.starts_with('t') {
+            "\t"
+        } else if remaining.starts_with('@') {
+            "@"
+        } else if remaining.starts_with('?') {
+            "?"
         } else {
-            Err(anyhow!(
+            return Err(anyhow!(
                 "Parsing escape character failed, remaining: {remaining}"
-            ))
-        }
+            ));
+        };
+
+        Ok(ParseSuccessful::skip_one_char(remaining, parsed))
     }
 
     fn parse_formatting_specifier<'a>(
@@ -249,18 +273,14 @@ impl ParsedStringXmlValue {
         current_arg_number: &mut u32,
     ) -> Result<ParseSuccessful<'a>> {
         if remaining.starts_with('%') {
-            Ok(ParseSuccessful::skip_one_char(
-                remaining,
-                ParsedStringXmlValuePart::Text("%".to_string()),
-            ))
+            Ok(ParseSuccessful::skip_one_char(remaining, "%"))
         } else if remaining.starts_with('s') {
-            let specifier = FormatSpecifier {
-                specifier_type: FormatSpecifierType::String,
-                arg_number: *current_arg_number,
-            };
             let parsed = ParseSuccessful::skip_one_char(
                 remaining,
-                ParsedStringXmlValuePart::FormatSpecifier(specifier),
+                FormatSpecifier {
+                    specifier_type: FormatSpecifierType::String,
+                    arg_number: *current_arg_number,
+                },
             );
             *current_arg_number += 1;
             Ok(parsed)
@@ -301,13 +321,13 @@ struct ParseSuccessful<'a> {
 impl<'a> ParseSuccessful<'a> {
     pub fn skip_one_char(
         remaining: &'a str,
-        parsed: ParsedStringXmlValuePart,
+        parsed: impl Into<ParsedStringXmlValuePart>,
     ) -> ParseSuccessful<'a> {
         let mut new_chars = remaining.chars();
         new_chars.next();
         Self {
             new_iterator_state: new_chars,
-            parsed,
+            parsed: parsed.into(),
         }
     }
 }
