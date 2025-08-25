@@ -72,7 +72,7 @@ enum ParserState {
 fn handle_strings_xml(xml: impl AsRef<Path>, locale: &str) -> Result<ParsedStringsXml> {
     let path = xml.as_ref();
     let contents = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read strings.xml at {:?}", path))?;
+        .with_context(|| format!("Failed to read strings.xml at {path:?}"))?;
 
     let mut state = ParserState::Start;
     let mut parsed_xml = ParsedStringsXml {

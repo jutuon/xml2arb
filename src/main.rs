@@ -8,7 +8,7 @@ fn main() {
     let parsed_strings = match xml::parse_android_strings_xml_files(&config.input_dir) {
         Ok(parsed_strings) => parsed_strings,
         Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
             std::process::exit(1);
         }
     };
@@ -18,7 +18,7 @@ fn main() {
         parsed_strings,
         config.arb_file_name_template,
     ) {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         std::process::exit(1);
     }
 }
