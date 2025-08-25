@@ -204,7 +204,7 @@ impl From<String> for ParsedStringXmlValuePart {
     }
 }
 
-impl <'a> From<&'a str> for ParsedStringXmlValuePart {
+impl<'a> From<&'a str> for ParsedStringXmlValuePart {
     fn from(value: &'a str) -> Self {
         Self::Text(value.to_string())
     }
