@@ -110,15 +110,17 @@ fn handle_strings_xml(xml: impl AsRef<Path>, locale: &str) -> Result<ParsedStrin
                 ParserState::InString => {
                     if name.local_name == STRINGS_XML_STRING_TAG {
                         state = ParserState::InResources;
+                        if let Some(current_string) = current_string.take() {
+                            parsed_xml.strings.push(current_string);
+                        }
                     }
                 }
             },
             xml::reader::XmlEvent::Characters(s) => match state {
                 ParserState::Start | ParserState::InResources => (),
                 ParserState::InString => {
-                    if let Some(mut current_string) = current_string.take() {
+                    if let Some(current_string) = &mut current_string {
                         current_string.value = ParsedStringXmlValue::parse(s)?;
-                        parsed_xml.strings.push(current_string);
                     }
                 }
             },
